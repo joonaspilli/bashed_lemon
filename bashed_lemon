@@ -1,0 +1,593 @@
+#!/usr/bin/env bash
+
+################################################################################
+# Force to run in its own session when ran non-interactively (e.g. from another
+# script). With this, all created subprocesses are grouped under the same PGID,
+# allowing easy termination of the statusbar.
+
+pgid_from_pid () {
+    ps -o pgid= "$1" 2>/dev/null | egrep -o '[0-9]+'
+}
+
+if [[ "$$" != "$(pgid_from_pid "$$")" ]]; then
+    exec setsid "$(readlink -f "$0")" "$@"
+fi
+
+################################################################################
+# Info
+
+# Global variable name prefixes:
+# MODULES_
+# USER_
+# DEFAULT_
+# GLOBAL_
+
+# Module (bash function) name prefixes:
+# mod_
+# submod_
+
+# NOTE: Use print_nothing function to print out the GLOBAL_NOTHING variable,
+# which tells the main module printing loops to not output anything.
+
+################################################################################
+# Global variables
+
+if [[ -d "$HOME/.bashed_lemon" ]]; then
+	declare -r GLOBAL_CONFIG_DIR="$HOME/.bashed_lemon"
+else
+	declare -r GLOBAL_CONFIG_DIR="$(dirname "$0")"
+fi
+declare -r GLOBAL_CONFIG_FILE="$GLOBAL_CONFIG_DIR/config"
+declare -r GLOBAL_MODULES_DIR="$GLOBAL_CONFIG_DIR/modules"
+declare -r GLOBAL_EXECUTABLE="$0"
+declare -r GLOBAL_BASENAME=$(basename "$0")
+declare -r GLOBAL_PROCESS_ID=$$
+declare -r GLOBAL_X_AVAILABLE=$( [[ -n "$DISPLAY" ]] && printf 1 || printf 0)
+declare -r GLOBAL_NOTHING=-1
+declare -r GLOBAL_EXIT_SUCCESS=0
+declare -r GLOBAL_EXIT_ERROR=1
+declare -Ar GLOBAL_LOG_LEVELS=(
+	[NORMAL]=0
+	[LOW]=1
+	[MEDIUM]=2
+	[HIGH]=3
+)
+
+################################################################################
+# Default settings
+
+declare -Ar DEFAULT_COLORS=(
+	[ALERT]='#FFFF00'
+	[BACKGROUND]='#0D0D0D'
+	[DIMMED]='#6D6D6D'
+	[FOREGROUND]='#FAFAFA'
+	[HIGHLIGHT]='#FFF'
+	[ICON]='#FFA500'
+	[NOTIFY]='#268BD2'
+	[WARNING]='#FF0000'
+)
+
+declare -Ar DEFAULT_ICONS=(
+	[BATTERY]=''
+	[BOLT]=''
+	[GLOBE_EUROPE]=''
+	[LIGHTBULB]=''
+	[MEMORY]=''
+	[MICROCHIP]=''
+	[NETWORK_WIRED]=''
+	[PAUSE]=''
+	[PLAY]=''
+	[TEMPERATURE_HIGH]=''
+	[VOLUME_DOWN]=''
+	[VOLUME_MUTE]=''
+	[VOLUME_OFF]=''
+	[VOLUME_UP]=''
+	[WIFI]=''
+	[LEMON]=''
+)
+
+declare -Ar DEFAULT_SETTINGS=(
+	[BAR_BG]="${DEFAULT_COLORS[BACKGROUND]}"
+	[BAR_FG]="${DEFAULT_COLORS[FOREGROUND]}"
+	[BAR_HEIGHT]=24
+	[BAR_PADDING]=' '
+	[BAR_UNDERLINE_WIDTH]=4
+	[DOCK_TO_BOTTOM]=1
+	[FONT_ICON]='Font Awesome 5 Free Solid:size=10'
+	[FONT_MAIN]='Hack:size=9'
+	[LOG_FILE]="$GLOBAL_CONFIG_DIR/log"
+	[MODULE_PADDING]=' '
+	[MODULE_SEPARATOR]="%{F${DEFAULT_COLORS[NOTIFY]}}•%{F-}"
+	[PID_FILE]="/tmp/$USER.statusbar_pid"
+	[WARNING_BLINK_COUNT]=3
+	[WARNING_BLINK_SPEED]='0.5'
+)
+
+declare -r DEFAULT_MODULES_BAR=(
+	mod_icon
+)
+
+################################################################################
+# Helper functions
+
+initialize_settings () {
+	local key
+	if [[ -x "$GLOBAL_CONFIG_FILE" ]]; then
+		source "$GLOBAL_CONFIG_FILE"
+	else
+		msg -e "No user configuration file or invalid permissions ($GLOBAL_CONFIG_FILE)"
+		exit "$GLOBAL_EXIT_SUCCESS"
+	fi
+	declare -Ag GLOBAL_COLORS
+	for key in "${!DEFAULT_COLORS[@]}"; do
+		GLOBAL_COLORS["$key"]=${USER_COLORS["$key"]-${DEFAULT_COLORS["$key"]}}
+		msg -d -l 2 "GLOBAL_COLORS["$key"]='${GLOBAL_COLORS[$key]}'"
+	done
+	readonly GLOBAL_COLORS
+	declare -Ag GLOBAL_ICONS
+	for key in "${!DEFAULT_ICONS[@]}"; do
+		GLOBAL_ICONS["$key"]=${USER_ICONS["$key"]-${DEFAULT_ICONS["$key"]}}
+		msg -d -l 2 "GLOBAL_ICONS["$key"]='${GLOBAL_ICONS[$key]}'"
+	done
+	readonly GLOBAL_ICONS
+	declare -Ag GLOBAL_SETTINGS
+	for key in "${!DEFAULT_SETTINGS[@]}"; do
+		GLOBAL_SETTINGS["$key"]=${USER_SETTINGS["$key"]-${DEFAULT_SETTINGS["$key"]}}
+		msg -d -l 2 "GLOBAL_SETTINGS["$key"]='${GLOBAL_SETTINGS[$key]}'"
+	done
+	readonly GLOBAL_SETTINGS
+}
+
+load_modules () {
+	local module
+	if [[ -r "$GLOBAL_MODULES_DIR" ]]; then
+		for module in "$GLOBAL_MODULES_DIR"/mod_*; do
+			if [[ -x "$module" ]]; then
+				msg -d "Sourcing module file: $module"
+				source "$module"
+			fi
+		done
+	fi
+}
+
+log () {
+	local OPTIND arg flag_l
+	while getopts ':l:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LOG_LEVEL=${flag_l:-${GLOBAL_LOG_LEVELS[NORMAL]}}
+	if (( GLOBAL_ENABLE_LOGGING && LOG_LEVEL <= GLOBAL_LOG_LEVEL )); then
+		local -r LOG_FILE=$(setting 'LOG_FILE')
+		if [[ -w "$LOG_FILE" ]]; then
+			printf '%b\n' "[$(date)] ${@}" >> "$LOG_FILE"
+		fi
+	fi
+}
+
+msg () {
+	local OPTIND arg flag_d flag_e flag_l
+	while getopts ':del:' arg; do
+		case "$arg" in
+			d) flag_d=1 ;;
+			e) flag_e=1 ;;
+			l) flag_l="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r DEBUG_MSG=${flag_d:-0}
+	local -r ERROR_MSG=${flag_e:-0}
+	local -r LOG_LEVEL=${flag_l:-${GLOBAL_LOG_LEVELS[NORMAL]}}
+	if (( LOG_LEVEL <= GLOBAL_LOG_LEVEL )); then
+		if (( DEBUG_MSG )); then
+			if (( GLOBAL_DEBUG_MODE )); then
+				printf '%b\n' "$@" >&2
+			fi
+		elif (( ERROR_MSG )); then
+			printf '%s: %s\n' "$GLOBAL_BASENAME" "$@" >&2
+		else
+			printf '%s: %s\n' "$GLOBAL_BASENAME" "$@"
+		fi
+		log -l "$LOG_LEVEL" "$@"
+	fi
+}
+
+print_module () {
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		if [[ "$1" =~ ^[0-9]+$ ]]; then
+			printf '%d:%s\n' "$1" "${@:2}"
+		else
+			msg -e "Invalid index '$1' for output: '${@:2}'"
+			die
+		fi
+	else
+		printf '%s' "${@:2}"
+	fi
+}
+
+print_nothing () {
+	printf '%s' "$GLOBAL_NOTHING"
+}
+
+setting () {
+	printf '%s' "${GLOBAL_SETTINGS[$1]}"
+}
+
+color () {
+	printf '%s' "${GLOBAL_COLORS[$1]}"
+}
+
+icon () {
+	local OPTIND arg flag_c flag_l flag_t
+	while getopts ':c:l:t:' arg; do
+		case "$arg" in
+			c) flag_c=$(color "$OPTARG") ;;
+			l) flag_l="$OPTARG" ;;
+			t) flag_t="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r COLOR=${flag_c:-$(color 'ICON')}
+	local -r LEAD=${flag_l}
+	local -r TRAIL=${flag_t-' '}
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		printf '%%{F%s}%%{T2}%s%s%s%%{T-}%%{F-}'\
+			"$COLOR" "$LEAD" "${GLOBAL_ICONS[$1]}" "$TRAIL"
+	fi
+}
+
+decorate () {
+	local OPTIND arg flag_p flag_f flag_b flag_u
+	while getopts ':pf:b:u:' arg; do
+		case "$arg" in
+			p) flag_p=$(setting 'MODULE_PADDING') ;;
+			f) flag_f="$OPTARG" ;;
+			b) flag_b="$OPTARG" ;;
+			u) flag_u="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r PAD=$flag_p
+	local -r FG=$flag_f
+	local -r BG=$flag_b
+	local -r UNDERLINE=$flag_u
+	local text="$@"
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		local line=
+		if [[ -n "$UNDERLINE" ]]; then
+			text=$(printf '%s' "$text" | perl -pe 's|%\{U.*?\}||gi')
+			line+="%{+u}%{U$UNDERLINE}"
+		fi
+		if [[ -n "$FG" ]]; then
+			text=$(printf '%s' "$text" | perl -pe 's|%\{F.*?\}||g')
+			line+="%{F$FG}"
+		fi
+		if [[ -n "$BG" ]]; then
+			text=$(printf '%s' "$text" | perl -pe 's|%\{B.*?\}||g')
+			line+="%{B$BG}"
+		fi
+		line+="$PAD$text$PAD"
+		[[ -n "$BG" ]] && line+="%{B-}"
+		[[ -n "$FG" ]] && line+="%{F-}"
+		[[ -n "$UNDERLINE" ]] && line+="%{-u}%{U-}"
+		printf '%s' "$line"
+	else
+		printf '%s' "$text"
+	fi
+}
+
+warning () {
+	local OPTIND arg flag_b
+	while getopts ':b' arg; do
+		case "$arg" in
+			b) flag_b=1 ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r BLINK=${flag_b:-0}
+	local -r TEXT=$( (( BLINK )) && printf '%s' "${@:2}" || printf '%s' "$@")
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		local -r WARNING_TEXT=$(decorate\
+			-pf "$(color 'BACKGROUND')"\
+			-b "$(color 'WARNING')"\
+			"$TEXT"\
+		)
+		if (( BLINK )); then
+			local -r BLINK_SPEED=$(setting 'WARNING_BLINK_SPEED')
+			local -r BLINK_COUNT=$(( $(setting 'WARNING_BLINK_COUNT') * 2 ))
+			local -r NORMAL_TEXT=$(decorate -p "$TEXT")
+			local i
+			for (( i=1; i <= "$BLINK_COUNT"; ++i)); do
+				if (( i % 2 )); then
+					print_module "$1" "$NORMAL_TEXT"
+				else
+					print_module "$1" "$WARNING_TEXT"
+				fi
+				sleep "$BLINK_SPEED"
+			done
+		else
+			printf '%s' "$WARNING_TEXT"
+		fi
+	else
+		printf '%s\t[WARNING]' "$TEXT"
+	fi
+}
+
+alert () {
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		decorate -pf "$(color 'BACKGROUND')" -b "$(color 'ALERT')" "$@"
+	else
+		printf '%s\t[ALERT]' "$@"
+	fi
+}
+
+notify () {
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		decorate -pf "$(color 'HIGHLIGHT')" -b "$(color 'NOTIFY')" "$@"
+	else
+		printf '%s\t[NOTE]' "$@"
+	fi
+}
+
+dim () {
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		decorate -f "$(color 'DIMMED')" "$@"
+	else
+		printf '%s' "$@"
+	fi
+}
+
+################################################################################
+# Modules
+
+mod_icon () {
+	local OPTIND arg flag_c flag_i
+	while getopts ':i:c:' arg; do
+		case "$arg" in
+			c) flag_c="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r COLOR=${flag_c:-$(color 'ICON')}
+	local -r ICON=${flag_i:-$(icon -c "$COLOR" -t '' "${flag_i:-LEMON}")}
+	print_module "$1" "$ICON$LABEL"
+}
+
+mod_center () {
+	print_module "$1" "%{c}"
+}
+
+mod_right () {
+	print_module "$1" "%{r}"
+}
+
+################################################################################
+# Main
+
+main () {
+	local OPTIND arg flag_b flag_d flag_l flag_L flag_k flag_r flag_q
+	while getopts ':hbdlL:krq:' arg; do
+		case "$arg" in
+			h)
+				usage
+				exit "$GLOBAL_EXIT_SUCCESS"
+				;;
+			b)
+				if (( GLOBAL_X_AVAILABLE )); then
+					flag_b=1
+				else
+					msg -e '$DISPLAY is not set.'
+					exit "$GLOBAL_EXIT_ERROR"
+				fi
+				;;
+			d)
+				flag_d=1
+				;;
+			l)
+				flag_l=1
+				;;
+			L)
+				flag_L="$OPTARG"
+				;;
+			k)
+				flag_k=1
+				;;
+			r)
+				flag_r=1
+				;;
+			q)
+				flag_q="$OPTARG" ;;
+			*)
+				msg -e "Invalid option '$OPTARG'"
+				usage
+				exit "$GLOBAL_EXIT_ERROR"
+				;;
+		esac
+	done
+	shift $((OPTIND-1))
+	declare -gr GLOBAL_STATUSBAR_MODE=${flag_b:-0}
+	declare -gr GLOBAL_DEBUG_MODE=${flag_d:-0}
+	declare -gr GLOBAL_ENABLE_LOGGING=${flag_l:-0}
+	declare -gr GLOBAL_LOG_LEVEL=${flag_L:-0}
+	initialize_settings
+	load_modules
+	(( flag_r )) && restart
+	(( flag_k )) && die
+	[[ -n "$flag_q" ]] && query "$flag_q"
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		start_statusbar
+	else
+		print_tty_modules
+	fi
+	exit "$GLOBAL_EXIT_SUCCESS"
+}
+
+usage () {
+cat << _EOF_
+Usage: $GLOBAL_BASENAME OPTION?
+
+No option:	Print TTY modules.
+
+Options:
+	-h		Print help.
+	-b		Start statusbar (if X is available).
+	-d		Enable debugging. Output to stderr.
+	-l		Enable message logging to log file. Log file must exist and have write permissions.
+	-L		Set logging level (for both file and stderr). Valid values are 0 (default) through to 3.
+	-k		Kill current statusbar.
+	-r		Restart statusbar if it is running.
+	-q OPTION	Query for info.
+		Options:
+			conf	Print user configuration file location.
+			pid	Print statusbar PID.
+			pidfile	Print statusbar PID file location.
+			logfile	Print log file location.
+_EOF_
+}
+
+die () {
+	local PID_FILE=$(setting 'PID_FILE')
+	if [[ -e "$PID_FILE" ]]; then
+		local -r PID=$(cat "$PID_FILE")
+		kill -- -$PID
+		if [[ "$?" == 0 ]]; then
+			exit "$GLOBAL_EXIT_SUCCESS"
+		else
+			msg -e 'Failed to stop processes.'
+			exit "$GLOBAL_EXIT_ERROR"
+		fi
+	else
+		msg -e "PID file ($PID_FILE) does not exist."
+		exit "$GLOBAL_EXIT_ERROR"
+	fi
+}
+
+restart () {
+	"$GLOBAL_EXECUTABLE" -k
+	if [[ "$?" == 0 ]]; then
+		"$GLOBAL_EXECUTABLE" -b &
+		msg 'Restarted'
+		exit "$GLOBAL_EXIT_SUCCESS"
+	else
+		exit "$GLOBAL_EXIT_ERROR"
+	fi
+}
+
+query () {
+	case "$1" in
+		conf)
+			printf '%s\n' "$GLOBAL_CONFIG_FILE"
+			exit "$GLOBAL_EXIT_SUCCESS"
+			;;
+		pid)
+			local PID_FILE=$(setting 'PID_FILE')
+			if [[ -e "$PID_FILE" ]]; then
+				printf '%s\n' "$(cat "$PID_FILE")"
+				exit "$GLOBAL_EXIT_SUCCESS"
+			else
+				msg -e "PID file ($PID_FILE) does not exist."
+				exit "$GLOBAL_EXIT_ERROR"
+			fi
+			;;
+		pidfile)
+			printf '%s\n' "$(setting 'PID_FILE')"
+			exit "$GLOBAL_EXIT_SUCCESS"
+			;;
+		logfile)
+			printf '%s\n' "$(setting 'LOG_FILE')"
+			exit "$GLOBAL_EXIT_SUCCESS"
+			;;
+		*)
+			msg -e "Invalid query option '$1'"
+			usage
+			exit "$GLOBAL_EXIT_ERROR"
+			;;
+	esac
+	exit "$GLOBAL_EXIT_SUCCESS"
+}
+
+clean_up () {
+	local -r PID_FILE=$(setting 'PID_FILE')
+	if [[ -e "$PID_FILE" ]]; then
+		msg -d "Removing: $PID_FILE"
+		rm "$PID_FILE"
+	fi
+	exit "$GLOBAL_EXIT_SUCCESS"
+}
+
+print_statusbar () {
+	if [[ -n "${MODULES_BAR[@]}" ]]; then
+		local -r MODULES=("${MODULES_BAR[@]}")
+	else
+		local -r MODULES=("${DEFAULT_MODULES_BAR[@]}")
+	fi
+	local -r MODULES_LENGTH="${#MODULES[@]}"
+	local -r BAR_PAD=$(setting 'BAR_PADDING')
+	local -r MOD_PAD=$(setting 'MODULE_PADDING')
+	local -r SEP=$(setting 'MODULE_SEPARATOR')
+	# Clear IFS to prevent read from cutting leading/trailing whitespace
+	local -r IFS=
+	local outputs=()
+	local i status
+	for (( i=0 ; i < "$MODULES_LENGTH" ; ++i )); do
+		local module="${MODULES[$i]}"
+		eval "$module ${MODULES_BAR_FLAGS[$module]} $i" &
+	done | while read -r status; do
+		local index="${status%%:*}"
+		local output="${status#*:}"
+		local stored_output
+		local add_sep=0
+		local line="$BAR_PAD"
+		msg -d -l 3 "MODULE $index:\n\tRAW: '$status'\n\tOUT: '$output'\n"
+		outputs["$index"]="$output"
+		for stored_output in "${outputs[@]}"; do
+			[[ "$stored_output" == "$GLOBAL_NOTHING" ]] && continue
+			# Skip adding separators with alignment modules
+			if [[ "$stored_output" =~ ^(%\{c\})|(%\{r\})$ ]]; then
+				add_sep=0
+			else
+				if (( add_sep )); then
+					line+="$MOD_PAD$SEP$MOD_PAD"
+				else
+					add_sep=1
+				fi
+			fi
+			line+="$stored_output"
+		done
+		line+="$BAR_PAD"
+		msg -d -l 3 "BAR: '$line'\n"
+		printf '%s\n' "$line"
+	done
+}
+
+start_statusbar () {
+	local -r PID_FILE=$(setting 'PID_FILE')
+	if [[ -e "$PID_FILE" ]]; then
+		msg -e "PID file ("$PID_FILE") already exists. Resolve and run again."
+		exit "$GLOBAL_EXIT_ERROR"
+	fi
+	printf '%d' $GLOBAL_PROCESS_ID > "$PID_FILE"
+	trap clean_up SIGINT SIGTERM
+	print_statusbar | lemonbar -p\
+		"$( (( $(setting 'DOCK_TO_BOTTOM') )) && printf '%q' '-b' )"\
+		-f "$(setting 'FONT_MAIN')"\
+		-f "$(setting 'FONT_ICON')"\
+		-F "$(setting 'BAR_FG')"\
+		-B "$(setting 'BAR_BG')"\
+		-u "$(setting 'BAR_UNDERLINE_WIDTH')"\
+		-g "x$(setting 'BAR_HEIGHT')"
+}
+
+print_tty_modules () {
+	local module
+	for module in "${MODULES_TTY[@]}"; do
+		local status=$(eval "$module ${MODULES_TTY_FLAGS[$module]}")
+		[[ "$status" != "$GLOBAL_NOTHING" ]] && printf '%s\n' "$status"
+	done
+}
+
+main "$@"
+clean_up

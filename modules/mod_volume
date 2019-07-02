@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+mod_volume () {
+	local OPTIND arg flag_l flag_f
+	while getopts ':l:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-10}
+	local -r ICON_OFF=$(icon 'VOLUME_OFF')
+	local -r ICON_DOWN=$(icon 'VOLUME_DOWN')
+	local -r ICON_UP=$(icon 'VOLUME_UP')
+	local -r ICON_MUTE=$(icon 'VOLUME_MUTE')
+	local prev_info
+	for ((;;)); do
+		local info=$(amixer get Master)
+		if [[ "$info" != "$prev_info" ]]; then
+			prev_info="$info"
+			local icon
+			local vol=$(printf '%s' "$info" | grep -Po '\d+(?=%)')
+			local status=$(printf '%s' "$info" | grep -Po '(?<=\[)(on|off)(?=\])')
+			if [[ "$status" == 'on' ]]; then
+				if (( vol == 0 )); then
+					icon="$ICON_OFF"
+				elif (( vol < 50 )); then
+					icon="$ICON_DOWN"
+				else
+					icon="$ICON_UP"
+				fi
+				print_module "$1" "$LABEL$icon$vol%"
+			else
+				icon="$ICON_MUTE"
+				print_module "$1" "$(dim "$LABEL$icon$vol%")"
+			fi
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

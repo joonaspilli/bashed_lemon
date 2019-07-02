@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+mod_lock_keys () {
+	local OPTIND arg flag_l flag_f
+	while getopts ':l:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-5}
+	local prev_status
+	for ((;;)); do
+		local status=$(xset -q | grep '00:')
+			if [[ "$status" != "$prev_status" ]]; then
+				prev_status="$status"
+				local output="$LABEL"
+				local caps=$(printf '%s' "$status" | awk '{print $4}')
+				local numl=$(printf '%s' "$status" | awk '{print $8}')
+				local scrl=$(printf '%s' "$status" | awk '{print $12}')
+				[[ "$caps" == "on" ]] && output+='CAPS '
+				[[ "$numl" == "on" ]] && output+='NUML '
+				[[ "$scrl" == "on" ]] && output+='SCRL '
+				if [[ -n "$output" ]]; then
+					print_module "$1" "$(notify "${output%?}")"
+				else
+					print_module "$1" "$(print_nothing)"
+				fi
+			fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}
+

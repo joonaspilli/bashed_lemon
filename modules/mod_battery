@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+submod_battery_max_charge () {
+	local -r DIR="/sys/class/power_supply/$1"
+	local -r ENERGY_MAX_DESIGN=$(cat "$DIR/energy_full_design")
+	local -r ENERGY_MAX_NOW=$(cat "$DIR/energy_full")
+	local -r MAX_CHARGE=$(( ENERGY_MAX_NOW * 100 / ENERGY_MAX_DESIGN ))
+	printf '%s%%' "$MAX_CHARGE"
+}
+
+mod_battery () {
+	local OPTIND arg flag_l flag_i flag_b flag_t flag_f flag_w flag_a flag_n
+	while getopts ':l:i:b:tf:w:a:n:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			b) flag_b="$OPTARG" ;;
+			t) flag_t=1 ;;
+			f) flag_f="$OPTARG" ;;
+			w) flag_w="$OPTARG" ;;
+			a) flag_a="$OPTARG" ;;
+			n) flag_n="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON=${flag_i:-$(icon 'BOLT')}
+	local -r BATTERY=${flag_b:-'BAT1'}
+	local -r SHOW_TIME=${flag_t:-0}
+	local -r FREQ=${flag_f:-20}
+	local -r WARN_THRES=${flag_w:-20}
+	local -r ALERT_THRES=${flag_a:-40}
+	local -r NOTIFY_THRES=${flag_n:-100}
+	local -r DIR="/sys/class/power_supply/$BATTERY"
+	for ((;;)); do
+		local bat_charge=$(cat "$DIR/capacity")
+		local bat_status=$(cat "$DIR/status")
+		local bat_time
+		if (( SHOW_TIME )); then
+			bat_time=$(acpi -b | grep -Po '\d{2}:.+?(?=\s)')
+			[[ -n "$bat_time" ]] && bat_time=" ($bat_time)"
+		fi
+		if (( bat_charge >= 100 )) && [[ "$bat_status" == 'Charging' ]]; then
+			bat_charge=100
+			bat_status='Full'
+		fi
+		local line="$LABEL$ICON$bat_charge% $bat_status$bat_time"
+		if [[ "$bat_status" == 'Discharging' ]]; then
+			if (( bat_charge <= WARN_THRES )); then
+				warning -b "$1" "$line"
+			elif (( bat_charge <= ALERT_THRES )); then
+				print_module "$1" "$(alert "$line")"
+			else
+				print_module "$1" "$line"
+			fi
+		else
+			if (( bat_charge >= NOTIFY_THRES )); then
+				print_module "$1" "$(notify\
+					"$line ($(submod_battery_max_charge "$BATTERY"))")"
+			else
+				print_module "$1" "$line"
+			fi
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

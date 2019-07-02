@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+mod_wifi () {
+	local OPTIND arg flag_l flag_i flag_f
+	while getopts ':l:i:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON=${flag_i:-$(icon 'WIFI')}
+	local -r FREQ=${flag_f:-30}
+	for ((;;)); do
+		local wifi_name=$(iwconfig wlp2s0 | grep -Po '(?<=").*(?=")')
+		if [[ -n "$wifi_name" ]]; then
+			print_module "$1" "$LABEL$ICON$wifi_name"
+		else
+			print_module "$1" "$(print_nothing)"
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

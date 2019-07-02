@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+mod_date () {
+	local OPTIND arg flag_l flag_f flag_F
+	while getopts ':l:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+			F) flag_F="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-60}
+	local -r FORMAT=${flag_F:-'+%a %d.%m.%y %H:%M'}
+	for ((;;)); do
+		local date_now=$(date "$FORMAT")
+		print_module "$1" "$LABEL$date_now"
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

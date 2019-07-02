@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+mod_internet () {
+	local OPTIND arg flag_l flag_I flag_i flag_f
+	while getopts ':l:Ii:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			I) flag_I=1 ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON_ONLY=${flag_I:-0}
+	local -r ICON=$(\
+		(( ICON_ONLY ))\
+		&& icon -c 'NOTIFY' -t '' 'GLOBE_EUROPE'\
+		|| icon 'GLOBE_EUROPE'\
+	)
+	local -r FREQ=${flag_f:-120}
+	for ((;;)); do
+		local status
+		ping -c 1 8.8.8.8 &>/dev/null
+		[[ "$?" == 0 ]] && status='Connected' || status='Disconnected'
+		if [[ "$status" == 'Connected' ]]; then
+			if (( ICON_ONLY )); then
+				print_module "$1" "$ICON"
+			else
+				print_module "$1" "$LABEL$ICON$status"
+			fi
+		else
+			if (( ICON_ONLY )); then
+				print_module "$1" "$(dim "$ICON")"
+			else
+				print_module "$1" "$(dim "$LABEL$ICON$status")"
+			fi
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

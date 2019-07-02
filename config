@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+declare -rg MODULES_BAR=(
+	mod_bspwm
+	mod_right
+	mod_mpc
+	mod_ram
+	mod_cpu
+	mod_thermal
+	mod_wifi
+	mod_backlight
+	mod_battery
+	mod_volume
+	mod_date
+	mod_internet
+	mod_lock_keys
+)
+
+declare -Arg MODULES_BAR_FLAGS=(
+	[mod_thermal]='-a 75 -u 70'
+	[mod_mpc]='-sm 30'
+	[mod_internet]='-If 60'
+)
+
+declare -rg MODULES_TTY=(
+	mod_backlight
+	mod_battery
+	mod_internet
+	mod_cpu
+	mod_date
+	mod_ethernet
+	mod_mpc
+	mod_ram
+	mod_swap
+	mod_thermal
+	mod_used_space_root
+	mod_volume
+	mod_wifi
+)
+
+declare -Arg MODULES_TTY_FLAGS=(
+	[mod_backlight]='-l "Backlight: "'
+	[mod_battery]='-tl "Battery: "'
+	[mod_internet]='-l "Internet: "'
+	[mod_cpu]='-l "CPU: "'
+	[mod_date]='-l "Date: "'
+	[mod_ethernet]='-l "Ethernet: "'
+	[mod_mpc]='-l "MPC: "'
+	[mod_ram]='-l "RAM: "'
+	[mod_swap]='-l "Swap: "'
+	[mod_thermal]='-l "Temp: "'
+	[mod_used_space_root]='-l "/: "'
+	[mod_volume]='-l "Volume: "'
+	[mod_wifi]='-l "WIFI: "'
+)
+
+declare -Arg USER_COLORS=()
+
+declare -Arg USER_ICONS=()
+
+declare -Arg USER_SETTINGS=()

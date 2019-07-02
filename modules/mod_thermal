@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+mod_thermal () {
+	local OPTIND arg flag_l flag_i flag_f flag_t flag_w flag_a flag_u
+	while getopts ':l:i:f:a:u:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			f) flag_f="$OPTARG" ;;
+			t) flag_t="$OPTARG" ;;
+			w) flag_w="$OPTARG" ;;
+			a) flag_a="$OPTARG" ;;
+			u) flag_u="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON=${flag_i:-$(icon 'TEMPERATURE_HIGH')}
+	local -r FREQ=${flag_f:-20}
+	local -r THERMAL=${flag_t:-'thermal_zone0'}
+	local -r DIR="/sys/class/thermal/$THERMAL"
+	local -r WARN_THRES=${flag_w:-100}
+	local -r ALERT_THRES=${flag_a:-95}
+	local -r HIDE_UNTIL=${flag_u:-$(( ALERT_THRES - 10 ))}
+	for ((;;)); do
+		local raw_temp=$(cat "$DIR/temp")
+		local temp=$(( raw_temp / 1000 ))
+		local output="$LABEL$ICON${temp}C"
+		if (( temp >= WARN_THRES )); then
+			warning -b "$1" "$output"
+		elif (( temp >= ALERT_THRES )); then
+			print_module "$1" "$(alert "$output")"
+		elif (( temp >= HIDE_UNTIL )); then
+			print_module "$1" "$output"
+		else
+			print_module "$1" "$(print_nothing)"
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

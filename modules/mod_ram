@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+mod_ram () {
+	local OPTIND arg flag_l flag_i flag_f flag_u
+	while getopts ':l:i:f:u:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			f) flag_f="$OPTARG" ;;
+			u) flag_u="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON=${flag_i:-$(icon 'MEMORY')}
+	local -r FREQ=${flag_f:-30}
+	local -r HIDE_UNTIL=${flag_u:-1000}
+	for ((;;)); do
+		local space_free=$(free -m | grep Mem | awk '{print $4}')
+		if (( space_free <= HIDE_UNTIL )); then
+			print_module "$1" "$LABEL$ICON${space_free}M free"
+		else
+			print_module "$1" "$(print_nothing)"
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

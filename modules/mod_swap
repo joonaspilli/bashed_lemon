@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+mod_swap () {
+	local OPTIND arg flag_l flag_f
+	while getopts ':l:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-60}
+	for ((;;)); do
+		local space_free=$(free -m | grep Swap | awk '{print $4}')
+		print_module "$1" "$LABEL${space_free} free"
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

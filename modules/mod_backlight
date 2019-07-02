@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+mod_backlight () {
+	local OPTIND arg flag_l flag_i flag_f
+	while getopts ':l:i:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			i) flag_i=$(icon "$OPTARG") ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r ICON=${flag_i:-$(icon 'LIGHTBULB')}
+	local -r FREQ=${flag_f:-10}
+	local -r BACKLIGHT='intel_backlight'
+	local -r DIR="/sys/class/backlight/$BACKLIGHT"
+	local -r MAX_BRIGHTNESS=$(cat "$DIR/max_brightness")
+	for ((;;)); do
+		local brightness=$(cat "$DIR/brightness")
+		local percentage=$(( brightness * 100 / MAX_BRIGHTNESS ))
+		print_module "$1" "$LABEL$ICON$percentage%"
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

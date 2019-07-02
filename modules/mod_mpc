@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+mod_mpc () {
+	local OPTIND arg flag_l flag_f flag_s flag_m flag_t flag_T
+	while getopts ':l:f:sm:t:T:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+			s) flag_s=1 ;;
+			m) flag_m="$OPTARG" ;;
+			t) flag_t="$OPTARG" ;;
+			T) flag_T="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-10}
+	local -r SHORTEN=${flag_s:-0}
+	local -r MAX_LEN=${flag_m:-10}
+	local -r TAIL_LEN=${flag_t:-8}
+	local -r TAIL_THRES=$(( MAX_LEN + ${flag_T:-10} ))
+	local -r ICON_PLAY=$(icon 'PLAY')
+	local -r ICON_PAUSE=$(icon 'PAUSE')
+	local prev_output
+	for ((;;)); do
+		local output=$(mpc status 2>/dev/null)
+		local output_lines=$(printf '%s\n' "$output" | wc -l)
+		if [[ -n "$output" ]] && (( output_lines > 2 )); then
+			if [[ "$output" != "$prev_output" ]]; then
+				prev_output="$output"
+				local icon
+				local status=$(printf '%s\n' "$output" | head -n 2 | tail -n 1)
+				local playback=$(printf '%s' "$status" |\
+					grep -Po '(?<=\[).+(?=\])')
+				local progress=$(printf '%s' "$status" |\
+					grep -Po '\d+:.*(?=\s)')
+				local song_name=$(printf '%s\n' "$output" | head -n 1)
+				local name_len="${#song_name}"
+				local song="$song_name"
+				if (( SHORTEN )) && (( name_len > MAX_LEN )); then
+					song="${song_name::$MAX_LEN}..."
+					if (( name_len > TAIL_THRES )); then
+						if (( MAX_LEN + TAIL_LEN >= name_len )); then
+							song="$song_name"
+						else
+							song="$song${song_name:$(( name_len-TAIL_LEN ))}"
+						fi
+					fi
+				fi
+				if [[ "$playback" == 'playing' ]]; then
+					icon="$ICON_PLAY"
+				else
+					icon="$ICON_PAUSE"
+				fi
+				print_module "$1" "$LABEL$icon$song ($progress)"
+			fi
+		else
+			print_module "$1" "$(print_nothing)"
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}

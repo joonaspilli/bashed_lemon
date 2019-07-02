@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+
+submod_bspwm_focused_monitor () {
+	local -r STATUS="$1"
+	local -r MONITOR=$(printf '%s' "$STATUS" | grep -Po '(?<=(W|:)M).+?(?=:)')
+	if (( $(bspc query -M | wc -l) > 1 )); then
+		local -r PRIMARY_MONITOR=$(xrandr -q |\
+			grep -Po '^.*(?= connected primary)')
+		if [[ "$MONITOR" == "$PRIMARY_MONITOR" ]]; then
+			print_nothing
+		else
+			notify "$MONITOR"
+		fi
+	else
+		print_nothing
+	fi
+}
+
+submod_bspwm_focused_desktops () {
+	local -r STATUS="$1"
+	local output=$(\
+		printf '%s' "$STATUS" |\
+		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' |\
+		tr '\n' ' '\
+	)
+	local output="${output%?}"
+	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
+}
+
+submod_bspwm_occupied_desktops () {
+	local -r STATUS="$1"
+	local output=$(\
+		printf '%s' "$STATUS" |\
+		grep -Poi '(?<=:(O|U)).+?(?=:)' |\
+		tr '\n' ' '\
+	)
+	local output="${output%?}"
+	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
+}
+
+submod_bspwm_urgent_desktops () {
+	local -r STATUS="$1"
+	local output=$(\
+		printf '%s' "$STATUS" |\
+		grep -Poi '(?<=:U).+?(?=:)' |\
+		tr '\n' ' '\
+	)
+	local output="${output%?}"
+	[[ -n "$output" ]] && alert "URGENT $output" || print_nothing
+}
+
+mod_bspwm () {
+	local OPTIND arg flag_s
+	while getopts ':s:' arg; do
+		case "$arg" in
+			s) flag_s="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r PAD=$(setting 'MODULE_PADDING')
+	local -r SEP=${flag_s-$(setting 'MODULE_SEPARATOR')}
+	local -r SUBMODS=(
+		submod_bspwm_focused_monitor
+		submod_bspwm_focused_desktops
+		submod_bspwm_occupied_desktops
+		submod_bspwm_urgent_desktops
+	)
+	local bspwm_status
+	local prev_status
+	bspc subscribe report | while read bspwm_status; do
+		# Ignore irrelevant changes
+		[[ "$bspwm_status" == "$prev_status" ]] && continue
+		prev_status="$bspwm_status"
+		local line=
+		local add_sep=0
+		local submod
+		for submod in "${SUBMODS[@]}"; do
+			local output=$($submod "$bspwm_status")
+			[[ "$output" == "$GLOBAL_NOTHING" ]] && continue
+			if (( add_sep )); then
+				line+="$PAD$SEP$PAD"
+			else
+				add_sep=1
+			fi
+			line+="$output"
+		done
+		print_module "$1" "$line"
+	done
+}
