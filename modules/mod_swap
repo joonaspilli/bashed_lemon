@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 
 mod_swap () {
-	local OPTIND arg flag_l flag_f
-	while getopts ':l:f:' arg; do
+	local OPTIND arg flag_l flag_f flag_u
+	while getopts ':l:f:u:' arg; do
 		case "$arg" in
 			l) flag_l="$OPTARG" ;;
 			f) flag_f="$OPTARG" ;;
+			u) flag_u="$OPTARG" ;;
 		esac
 	done
 	shift $((OPTIND-1))
 	local -r LABEL=$flag_l
 	local -r FREQ=${flag_f:-60}
+	local -r SPACE_AVAILABLE=$(free -m | grep Swap | awk '{print $2}')
+	local -r HIDE_UNTIL=${flag_u:-$(( SPACE_AVAILABLE - 1 ))}
 	for ((;;)); do
 		local space_free=$(free -m | grep Swap | awk '{print $4}')
-		print_module "$1" "$LABEL${space_free} free"
+		if (( space_free <= HIDE_UNTIL )); then
+			print_module "$1" "$LABEL${space_free}M free"
+		else
+			print_module "$1" "$(print_nothing)"
+		fi
 		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
 	done
 }
