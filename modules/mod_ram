@@ -14,7 +14,8 @@ mod_ram () {
 	local -r LABEL=$flag_l
 	local -r ICON=${flag_i:-$(icon 'MEMORY')}
 	local -r FREQ=${flag_f:-30}
-	local -r HIDE_UNTIL=${flag_u:-1000}
+	local -r SPACE_AVAILABLE=$(free -m | grep Mem | awk '{print $2}')
+	local -r HIDE_UNTIL=${flag_u:-$(( SPACE_AVAILABLE / 4 ))}
 	for ((;;)); do
 		local space_free=$(free -m | grep Mem | awk '{print $4}')
 		if (( space_free <= HIDE_UNTIL )); then
