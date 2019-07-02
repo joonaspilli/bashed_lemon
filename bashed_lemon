@@ -10,7 +10,7 @@ pgid_from_pid () {
 }
 
 if [[ "$$" != "$(pgid_from_pid "$$")" ]]; then
-    exec setsid "$(readlink -f "$0")" "$@"
+    exec setsid "$(realpath "$0")" "$@"
 fi
 
 ################################################################################
@@ -35,7 +35,7 @@ fi
 if [[ -d "$HOME/.bashed_lemon" ]]; then
 	declare -r GLOBAL_CONFIG_DIR="$HOME/.bashed_lemon"
 else
-	declare -r GLOBAL_CONFIG_DIR="$(dirname "$0")"
+	declare -r GLOBAL_CONFIG_DIR="$(dirname "$(realpath "$0")")"
 fi
 declare -r GLOBAL_CONFIG_FILE="$GLOBAL_CONFIG_DIR/config"
 declare -r GLOBAL_MODULES_DIR="$GLOBAL_CONFIG_DIR/modules"
