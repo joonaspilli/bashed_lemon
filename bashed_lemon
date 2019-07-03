@@ -6,10 +6,10 @@
 # allowing easy termination of the statusbar.
 
 pgid_from_pid () {
-    ps -o pgid= "$1" 2>/dev/null | egrep -o '[0-9]+'
+    ps -o pgid= $1 2>/dev/null | egrep -o '[0-9]+'
 }
 
-if [[ "$$" != "$(pgid_from_pid "$$")" ]]; then
+if [[ $$ != "$(pgid_from_pid $$)" ]]; then
     exec setsid "$(realpath "$0")" "$@"
 fi
 
@@ -44,8 +44,10 @@ declare -r GLOBAL_BASENAME=$(basename "$0")
 declare -r GLOBAL_PROCESS_ID=$$
 declare -r GLOBAL_X_AVAILABLE=$( [[ -n "$DISPLAY" ]] && printf 1 || printf 0)
 declare -r GLOBAL_NOTHING=-1
-declare -r GLOBAL_EXIT_SUCCESS=0
-declare -r GLOBAL_EXIT_ERROR=1
+declare -Ar GLOBAL_EXIT_CODES=(
+	[SUCCESS]=0
+	[ERROR]=1
+)
 declare -Ar GLOBAL_LOG_LEVELS=(
 	[NORMAL]=0
 	[LOW]=1
@@ -113,28 +115,29 @@ declare -r DEFAULT_MODULES_BAR=(
 
 initialize_settings () {
 	local key
+	local -r LOG_LEVEL=${GLOBAL_LOG_LEVELS[MEDIUM]}
 	if [[ -x "$GLOBAL_CONFIG_FILE" ]]; then
 		source "$GLOBAL_CONFIG_FILE"
 	else
 		msg -e "No user configuration file or invalid permissions ($GLOBAL_CONFIG_FILE)"
-		exit "$GLOBAL_EXIT_SUCCESS"
+		exit "${GLOBAL_EXIT_CODES[ERROR]}"
 	fi
 	declare -Ag GLOBAL_COLORS
 	for key in "${!DEFAULT_COLORS[@]}"; do
 		GLOBAL_COLORS["$key"]=${USER_COLORS["$key"]-${DEFAULT_COLORS["$key"]}}
-		msg -d -l 2 "GLOBAL_COLORS["$key"]='${GLOBAL_COLORS[$key]}'"
+		msg -d -l "$LOG_LEVEL" "GLOBAL_COLORS["$key"]='${GLOBAL_COLORS[$key]}'"
 	done
 	readonly GLOBAL_COLORS
 	declare -Ag GLOBAL_ICONS
 	for key in "${!DEFAULT_ICONS[@]}"; do
 		GLOBAL_ICONS["$key"]=${USER_ICONS["$key"]-${DEFAULT_ICONS["$key"]}}
-		msg -d -l 2 "GLOBAL_ICONS["$key"]='${GLOBAL_ICONS[$key]}'"
+		msg -d -l "$LOG_LEVEL" "GLOBAL_ICONS["$key"]='${GLOBAL_ICONS[$key]}'"
 	done
 	readonly GLOBAL_ICONS
 	declare -Ag GLOBAL_SETTINGS
 	for key in "${!DEFAULT_SETTINGS[@]}"; do
 		GLOBAL_SETTINGS["$key"]=${USER_SETTINGS["$key"]-${DEFAULT_SETTINGS["$key"]}}
-		msg -d -l 2 "GLOBAL_SETTINGS["$key"]='${GLOBAL_SETTINGS[$key]}'"
+		msg -d -l "$LOG_LEVEL" "GLOBAL_SETTINGS["$key"]='${GLOBAL_SETTINGS[$key]}'"
 	done
 	readonly GLOBAL_SETTINGS
 }
@@ -257,22 +260,26 @@ decorate () {
 	local text="$@"
 	if (( GLOBAL_STATUSBAR_MODE )); then
 		local line=
+		local u_added fg_added bg_added
 		if [[ -n "$UNDERLINE" ]]; then
-			text=$(printf '%s' "$text" | perl -pe 's|%\{U.*?\}||gi')
+			text=$(printf '%s' "$text" | perl -pe 's/%\{U.*?\}//gi')
 			line+="%{+u}%{U$UNDERLINE}"
+			u_added=1
 		fi
 		if [[ -n "$FG" ]]; then
-			text=$(printf '%s' "$text" | perl -pe 's|%\{F.*?\}||g')
+			text=$(printf '%s' "$text" | perl -pe 's/%\{F.*?\}//g')
 			line+="%{F$FG}"
+			fg_added=1
 		fi
 		if [[ -n "$BG" ]]; then
-			text=$(printf '%s' "$text" | perl -pe 's|%\{B.*?\}||g')
+			text=$(printf '%s' "$text" | perl -pe 's/%\{B.*?\}//g')
 			line+="%{B$BG}"
+			bg_added=1
 		fi
 		line+="$PAD$text$PAD"
-		[[ -n "$BG" ]] && line+="%{B-}"
-		[[ -n "$FG" ]] && line+="%{F-}"
-		[[ -n "$UNDERLINE" ]] && line+="%{-u}%{U-}"
+		(( bg_added )) && line+="%{B-}"
+		(( fg_added )) && line+="%{F-}"
+		(( u_added )) && line+="%{-u}%{U-}"
 		printf '%s' "$line"
 	else
 		printf '%s' "$text"
@@ -290,7 +297,8 @@ warning () {
 	local -r BLINK=${flag_b:-0}
 	local -r TEXT=$( (( BLINK )) && printf '%s' "${@:2}" || printf '%s' "$@")
 	if (( GLOBAL_STATUSBAR_MODE )); then
-		local -r WARNING_TEXT=$(decorate\
+		local -r WARNING_TEXT=$(\
+			decorate\
 			-pf "$(color 'BACKGROUND')"\
 			-b "$(color 'WARNING')"\
 			"$TEXT"\
@@ -368,69 +376,12 @@ mod_right () {
 ################################################################################
 # Main
 
-main () {
-	local OPTIND arg flag_b flag_d flag_l flag_L flag_k flag_r flag_q
-	while getopts ':hbdlL:krq:' arg; do
-		case "$arg" in
-			h)
-				usage
-				exit "$GLOBAL_EXIT_SUCCESS"
-				;;
-			b)
-				if (( GLOBAL_X_AVAILABLE )); then
-					flag_b=1
-				else
-					msg -e '$DISPLAY is not set.'
-					exit "$GLOBAL_EXIT_ERROR"
-				fi
-				;;
-			d)
-				flag_d=1
-				;;
-			l)
-				flag_l=1
-				;;
-			L)
-				flag_L="$OPTARG"
-				;;
-			k)
-				flag_k=1
-				;;
-			r)
-				flag_r=1
-				;;
-			q)
-				flag_q="$OPTARG" ;;
-			*)
-				msg -e "Invalid option '$OPTARG'"
-				usage
-				exit "$GLOBAL_EXIT_ERROR"
-				;;
-		esac
-	done
-	shift $((OPTIND-1))
-	declare -gr GLOBAL_STATUSBAR_MODE=${flag_b:-0}
-	declare -gr GLOBAL_DEBUG_MODE=${flag_d:-0}
-	declare -gr GLOBAL_ENABLE_LOGGING=${flag_l:-0}
-	declare -gr GLOBAL_LOG_LEVEL=${flag_L:-0}
-	initialize_settings
-	load_modules
-	(( flag_r )) && restart
-	(( flag_k )) && die
-	[[ -n "$flag_q" ]] && query "$flag_q"
-	if (( GLOBAL_STATUSBAR_MODE )); then
-		start_statusbar
-	else
-		print_tty_modules
-	fi
-	exit "$GLOBAL_EXIT_SUCCESS"
-}
-
 usage () {
 cat << _EOF_
 Usage: $GLOBAL_BASENAME OPTION?
 
-No option:	Print TTY modules.
+Description:
+	Print information about the system activity.
 
 Options:
 	-h		Print help.
@@ -454,15 +405,15 @@ die () {
 	if [[ -e "$PID_FILE" ]]; then
 		local -r PID=$(cat "$PID_FILE")
 		kill -- -$PID
-		if [[ "$?" == 0 ]]; then
-			exit "$GLOBAL_EXIT_SUCCESS"
+		if [[ $? == 0 ]]; then
+			exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
 		else
 			msg -e 'Failed to stop processes.'
-			exit "$GLOBAL_EXIT_ERROR"
+			exit "${GLOBAL_EXIT_CODES[ERROR]}"
 		fi
 	else
 		msg -e "PID file ($PID_FILE) does not exist."
-		exit "$GLOBAL_EXIT_ERROR"
+		exit "${GLOBAL_EXIT_CODES[ERROR]}"
 	fi
 }
 
@@ -471,9 +422,9 @@ restart () {
 	if [[ "$?" == 0 ]]; then
 		"$GLOBAL_EXECUTABLE" -b &
 		msg 'Restarted'
-		exit "$GLOBAL_EXIT_SUCCESS"
+		exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
 	else
-		exit "$GLOBAL_EXIT_ERROR"
+		exit "${GLOBAL_EXIT_CODES[ERROR]}"
 	fi
 }
 
@@ -481,33 +432,29 @@ query () {
 	case "$1" in
 		conf)
 			printf '%s\n' "$GLOBAL_CONFIG_FILE"
-			exit "$GLOBAL_EXIT_SUCCESS"
 			;;
 		pid)
 			local PID_FILE=$(setting 'PID_FILE')
 			if [[ -e "$PID_FILE" ]]; then
 				printf '%s\n' "$(cat "$PID_FILE")"
-				exit "$GLOBAL_EXIT_SUCCESS"
 			else
 				msg -e "PID file ($PID_FILE) does not exist."
-				exit "$GLOBAL_EXIT_ERROR"
+				exit "${GLOBAL_EXIT_CODES[ERROR]}"
 			fi
 			;;
 		pidfile)
 			printf '%s\n' "$(setting 'PID_FILE')"
-			exit "$GLOBAL_EXIT_SUCCESS"
 			;;
 		logfile)
 			printf '%s\n' "$(setting 'LOG_FILE')"
-			exit "$GLOBAL_EXIT_SUCCESS"
 			;;
 		*)
 			msg -e "Invalid query option '$1'"
 			usage
-			exit "$GLOBAL_EXIT_ERROR"
+			exit "${GLOBAL_EXIT_CODES[ERROR]}"
 			;;
 	esac
-	exit "$GLOBAL_EXIT_SUCCESS"
+	exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
 }
 
 clean_up () {
@@ -516,7 +463,7 @@ clean_up () {
 		msg -d "Removing: $PID_FILE"
 		rm "$PID_FILE"
 	fi
-	exit "$GLOBAL_EXIT_SUCCESS"
+	exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
 }
 
 print_statusbar () {
@@ -542,7 +489,7 @@ print_statusbar () {
 		local stored_output
 		local add_sep=0
 		local line="$BAR_PAD"
-		msg -d -l 3 "MODULE $index:\n\tRAW: '$status'\n\tOUT: '$output'\n"
+		msg -d -l "${GLOBAL_LOG_LEVELS[HIGH]}" "MODULE $index:\n\tRAW: '$status'\n\tOUT: '$output'\n"
 		outputs["$index"]="$output"
 		for stored_output in "${outputs[@]}"; do
 			[[ "$stored_output" == "$GLOBAL_NOTHING" ]] && continue
@@ -559,7 +506,7 @@ print_statusbar () {
 			line+="$stored_output"
 		done
 		line+="$BAR_PAD"
-		msg -d -l 3 "BAR: '$line'\n"
+		msg -d -l "${GLOBAL_LOG_LEVELS[HIGH]}" "BAR: '$line'\n"
 		printf '%s\n' "$line"
 	done
 }
@@ -567,8 +514,8 @@ print_statusbar () {
 start_statusbar () {
 	local -r PID_FILE=$(setting 'PID_FILE')
 	if [[ -e "$PID_FILE" ]]; then
-		msg -e "PID file ("$PID_FILE") already exists. Resolve and run again."
-		exit "$GLOBAL_EXIT_ERROR"
+		msg -e "PID file ($PID_FILE) already exists. Resolve and run again."
+		exit "${GLOBAL_EXIT_CODES[ERROR]}"
 	fi
 	printf '%d' $GLOBAL_PROCESS_ID > "$PID_FILE"
 	trap clean_up SIGINT SIGTERM
@@ -580,6 +527,7 @@ start_statusbar () {
 		-B "$(setting 'BAR_BG')"\
 		-u "$(setting 'BAR_UNDERLINE_WIDTH')"\
 		-g "x$(setting 'BAR_HEIGHT')"
+	clean_up
 }
 
 print_tty_modules () {
@@ -590,5 +538,47 @@ print_tty_modules () {
 	done
 }
 
+main () {
+	local OPTIND arg flag_b flag_d flag_l flag_L flag_k flag_r flag_q
+	while getopts ':hbdlL:krq:' arg; do
+		case "$arg" in
+			h)
+				usage
+				exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
+				;;
+			b)
+				if (( GLOBAL_X_AVAILABLE )); then
+					flag_b=1
+				else
+					msg -e '$DISPLAY is not set.'
+					exit "${GLOBAL_EXIT_CODES[ERROR]}"
+				fi
+				;;
+			d) flag_d=1 ;;
+			l) flag_l=1 ;;
+			L) flag_L="$OPTARG" ;;
+			k) flag_k=1 ;;
+			r) flag_r=1 ;;
+			q) flag_q="$OPTARG" ;;
+			*)
+				msg -e "Invalid option '$OPTARG'"
+				usage
+				exit "${GLOBAL_EXIT_CODES[ERROR]}"
+				;;
+		esac
+	done
+	shift $((OPTIND-1))
+	declare -gr GLOBAL_STATUSBAR_MODE=${flag_b:-0}
+	declare -gr GLOBAL_DEBUG_MODE=${flag_d:-0}
+	declare -gr GLOBAL_ENABLE_LOGGING=${flag_l:-0}
+	declare -gr GLOBAL_LOG_LEVEL=${flag_L:-0}
+	initialize_settings
+	load_modules
+	(( flag_k )) && die
+	(( flag_r )) && restart
+	[[ -n "$flag_q" ]] && query "$flag_q"
+	(( GLOBAL_STATUSBAR_MODE )) && start_statusbar || print_tty_modules
+}
+
 main "$@"
-clean_up
+exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
