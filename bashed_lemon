@@ -71,6 +71,8 @@ declare -Ar DEFAULT_ICONS=(
 	[BATTERY]=''
 	[BOLT]=''
 	[GLOBE_EUROPE]=''
+	[HDD]=''
+	[LEMON]=''
 	[LIGHTBULB]=''
 	[MEMORY]=''
 	[MICROCHIP]=''
@@ -83,7 +85,6 @@ declare -Ar DEFAULT_ICONS=(
 	[VOLUME_OFF]=''
 	[VOLUME_UP]=''
 	[WIFI]=''
-	[LEMON]=''
 )
 
 declare -Ar DEFAULT_SETTINGS=(
