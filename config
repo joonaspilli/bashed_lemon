@@ -12,8 +12,9 @@ declare -rg MODULES_BAR=(
 	mod_battery
 	mod_volume
 	mod_date
-	mod_internet
+	mod_kb_layout
 	mod_lock_keys
+	mod_internet
 )
 
 declare -Arg MODULES_BAR_FLAGS=(

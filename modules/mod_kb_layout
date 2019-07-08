@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+mod_kb_layout () {
+	local OPTIND arg flag_l flag_f
+	while getopts ':l:f:' arg; do
+		case "$arg" in
+			l) flag_l="$OPTARG" ;;
+			f) flag_f="$OPTARG" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	local -r LABEL=$flag_l
+	local -r FREQ=${flag_f:-5}
+	local prev_layout_index
+	for ((;;)); do
+		local layout_index=$(xset q | grep -Po '(?<=\d{4})\d(?=\d{3})')
+		if [[ "$prev_layout_index" != "$layout_index" ]]; then
+			prev_layout_index=$layout_index
+			local layouts=$(setxkbmap -query | grep 'layout:' | grep -Po '\S+$')
+			local layout=$(\
+				printf '%s' "$layouts" |\
+				awk -F ',' "{print \$$(( layout_index + 1 ))}"\
+			)
+			local output="$LABEL$layout"
+			if (( layout_index == 0 )); then
+				print_module "$1" "$output"
+			else
+				print_module "$1" "$(notify "$output")"
+			fi
+		fi
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "$FREQ" || break
+	done
+}
+
