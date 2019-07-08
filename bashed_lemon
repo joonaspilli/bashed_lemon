@@ -419,7 +419,7 @@ die () {
 
 restart () {
 	"$GLOBAL_EXECUTABLE" -k
-	if [[ "$?" == 0 ]]; then
+	if [[ $? == 0 ]]; then
 		"$GLOBAL_EXECUTABLE" -b &
 		msg 'Restarted'
 		exit "${GLOBAL_EXIT_CODES[SUCCESS]}"
