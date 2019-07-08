@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 
 mod_kb_layout () {
-	local OPTIND arg flag_l flag_f
-	while getopts ':l:f:' arg; do
+	local OPTIND arg flag_l flag_f flag_u
+	while getopts ':l:f:u:' arg; do
 		case "$arg" in
 			l) flag_l="$OPTARG" ;;
 			f) flag_f="$OPTARG" ;;
+			u) flag_u=1 ;;
 		esac
 	done
 	shift $((OPTIND-1))
 	local -r LABEL=$flag_l
 	local -r FREQ=${flag_f:-5}
+	local -r SHOW_IF_DEFAULT=${flag_u:-0}
 	local prev_layout_index
 	for ((;;)); do
 		local layout_index=$(xset q | grep -Po '(?<=\d{4})\d(?=\d{3})')
@@ -23,7 +25,11 @@ mod_kb_layout () {
 			)
 			local output="$LABEL$layout"
 			if (( layout_index == 0 )); then
-				print_module "$1" "$output"
+				if (( SHOW_IF_DEFAULT )); then
+					print_module "$1" "$output"
+				else
+					print_module "$1" "$(print_nothing)"
+				fi
 			else
 				print_module "$1" "$(notify "$output")"
 			fi
