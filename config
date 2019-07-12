@@ -17,6 +17,7 @@ declare -rg MODULES_BAR=(
 )
 
 declare -Arg MODULES_BAR_FLAGS=(
+	[mod_bspwm]='-c'
 	[mod_thermal]='-a 75 -u 70'
 	[mod_mpc]='-sm 30'
 	[mod_internet]='-If 60'

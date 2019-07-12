@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
 
+submod_bspwm_desktops () {
+	local -r STATUS="$1"
+	local -r FCS_OCC_COLOR=$(color 'NOTIFY')
+	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
+	local -r URGENT=$(grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS")
+	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
+	local desktops=$(bspc query -D --names)
+	local line
+	while read line; do
+		desktops=$(sed -E "s/\<^$line\$\>/$(notify "\0")/" <<< "$desktops")
+	done <<< "$FOCUSED"
+	while read line; do
+		desktops=$(sed -E "s/\<^$line\$\>/$(alert "\0")/" <<< "$desktops")
+	done <<< "$URGENT"
+	while read line; do
+		desktops=$(\
+			sed -E "s/\<^$line\$\>/$(decorate -u "$FCS_OCC_COLOR" "\0")/"\
+			<<< "$desktops"\
+		)
+	done <<< "$OCCUPIED"
+	local desktops_line=$(printf '%s' "$desktops" | tr '\n' ' ')
+	desktops_line=${desktops_line}
+	printf '%s' "$desktops_line"
+}
+
 submod_bspwm_focused_monitor () {
 	local -r STATUS="$1"
-	local -r MONITOR=$(printf '%s' "$STATUS" | grep -Po '(?<=(W|:)M).+?(?=:)')
+	local -r MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
 	if (( $(bspc query -M | wc -l) > 1 )); then
 		local -r PRIMARY_MONITOR=$(xrandr -q |\
 			grep -Po '^.*(?= connected primary)')
@@ -19,8 +44,7 @@ submod_bspwm_focused_monitor () {
 submod_bspwm_focused_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' |\
+		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
 	local output="${output%?}"
@@ -30,8 +54,7 @@ submod_bspwm_focused_desktops () {
 submod_bspwm_occupied_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Poi '(?<=:(O|U)).+?(?=:)' |\
+		grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
 	local output="${output%?}"
@@ -41,8 +64,7 @@ submod_bspwm_occupied_desktops () {
 submod_bspwm_urgent_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Poi '(?<=:U).+?(?=:)' |\
+		grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
 	local output="${output%?}"
@@ -50,21 +72,30 @@ submod_bspwm_urgent_desktops () {
 }
 
 mod_bspwm () {
-	local OPTIND arg flag_s
-	while getopts ':s:' arg; do
+	local OPTIND arg flag_s flag_c
+	while getopts ':s:c' arg; do
 		case "$arg" in
 			s) flag_s="$OPTARG" ;;
+			c) flag_c=1;;
 		esac
 	done
 	shift $((OPTIND-1))
-	local -r PAD=$(setting 'MODULE_PADDING')
 	local -r SEP=${flag_s-$(setting 'MODULE_SEPARATOR')}
-	local -r SUBMODS=(
-		submod_bspwm_focused_monitor
-		submod_bspwm_focused_desktops
-		submod_bspwm_occupied_desktops
-		submod_bspwm_urgent_desktops
-	)
+	local -r CONCISE=${flag_c:-0}
+	local -r PAD=$(setting 'MODULE_PADDING')
+	if (( CONCISE )); then
+		local -r SUBMODS=(
+			submod_bspwm_focused_monitor
+			submod_bspwm_desktops
+		)
+	else
+		local -r SUBMODS=(
+			submod_bspwm_focused_monitor
+			submod_bspwm_focused_desktops
+			submod_bspwm_occupied_desktops
+			submod_bspwm_urgent_desktops
+		)
+	fi
 	local bspwm_status
 	local prev_status
 	bspc subscribe report | while read bspwm_status; do
