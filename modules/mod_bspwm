@@ -20,7 +20,7 @@ submod_bspwm_desktops () {
 			<<< "$desktops"\
 		)
 	done <<< "$OCCUPIED"
-	local desktops=$(tr '\n' ' ' <<< "$desktops")
+	desktops=$(tr '\n' ' ' <<< "$desktops")
 	desktops=${desktops}
 	printf '%s' "$desktops"
 }
