@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-submod_bspwm_desktops () {
+submod_bspwm_visual () {
 	local -r STATUS="$1"
 	local -r FCS_OCC_COLOR=$(color 'NOTIFY')
 	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
@@ -76,21 +76,21 @@ submod_bspwm_urgent_desktops () {
 }
 
 mod_bspwm () {
-	local OPTIND arg flag_s flag_c
-	while getopts ':s:c' arg; do
+	local OPTIND arg flag_s flag_v
+	while getopts ':s:v' arg; do
 		case "$arg" in
 			s) flag_s="$OPTARG" ;;
-			c) flag_c=1;;
+			v) flag_v=1;;
 		esac
 	done
 	shift $((OPTIND-1))
 	local -r SEP=${flag_s-$(setting 'MODULE_SEPARATOR')}
-	local -r CONCISE=${flag_c:-0}
+	local -r VISUAL=${flag_v:-0}
 	local -r PAD=$(setting 'MODULE_PADDING')
-	if (( CONCISE )); then
+	if (( VISUAL )); then
 		local -r SUBMODS=(
 			submod_bspwm_focused_monitor
-			submod_bspwm_desktops
+			submod_bspwm_visual
 		)
 	else
 		local -r SUBMODS=(
