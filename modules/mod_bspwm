@@ -13,12 +13,17 @@ submod_bspwm_visual_create_pattern () {
 
 submod_bspwm_visual () {
 	local -r STATUS="$1"
-	local -r FCS_OCC_COLOR=$(color 'NOTIFY')
-	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
+	local -r OCC_FOCUSED=$(grep -Po '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
+	local -r FOCUSED=$(grep -Po '(?<=:(F|U)).+?(?=:)' <<< "$STATUS")
 	local -r URGENT=$(grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS")
 	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
 	local desktops=$(bspc query -D --names)
 	local pattern
+	# Occupied focused desktops
+	pattern=$(submod_bspwm_visual_create_pattern "$OCC_FOCUSED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(sed -E "s/$pattern/$(decorate -pf "$(color 'HIGHLIGHT')" -b "$(color 'NOTIFY')" -u "$(color 'HIGHLIGHT')" "\0")/" <<< "$desktops")
+	fi
 	# Focused desktops
 	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
 	if [[ -n "$pattern" ]]; then
@@ -33,7 +38,7 @@ submod_bspwm_visual () {
 	pattern=$(submod_bspwm_visual_create_pattern "$OCCUPIED")
 	if [[ -n "$pattern" ]]; then
 		desktops=$(\
-			sed -E "s/$pattern/$(decorate -pu "$FCS_OCC_COLOR" "\0")/"\
+			sed -E "s/$pattern/$(decorate -u "$(color 'NOTIFY')" "\0")/"\
 			<<< "$desktops"\
 		)
 	fi
