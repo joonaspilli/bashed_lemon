@@ -16,13 +16,13 @@ submod_bspwm_desktops () {
 	done <<< "$URGENT"
 	while read line; do
 		desktops=$(\
-			sed -E "s/\<^$line\$\>/$(decorate -u "$FCS_OCC_COLOR" "\0")/"\
+			sed -E "s/\<^$line\$\>/$(decorate -pu "$FCS_OCC_COLOR" "\0")/"\
 			<<< "$desktops"\
 		)
 	done <<< "$OCCUPIED"
-	local desktops_line=$(printf '%s' "$desktops" | tr '\n' ' ')
-	desktops_line=${desktops_line}
-	printf '%s' "$desktops_line"
+	local desktops=$(tr '\n' ' ' <<< "$desktops")
+	desktops=${desktops}
+	printf '%s' "$desktops"
 }
 
 submod_bspwm_focused_monitor () {
