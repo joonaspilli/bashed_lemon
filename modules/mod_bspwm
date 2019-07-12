@@ -8,18 +8,22 @@ submod_bspwm_desktops () {
 	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
 	local desktops=$(bspc query -D --names)
 	local line
+	# Focused desktops
 	while read line; do
 		desktops=$(sed -E "s/\<^$line\$\>/$(notify "\0")/" <<< "$desktops")
 	done <<< "$FOCUSED"
+	# Urgent desktops
 	while read line; do
 		desktops=$(sed -E "s/\<^$line\$\>/$(alert "\0")/" <<< "$desktops")
 	done <<< "$URGENT"
+	# Occupied desktops
 	while read line; do
 		desktops=$(\
 			sed -E "s/\<^$line\$\>/$(decorate -pu "$FCS_OCC_COLOR" "\0")/"\
 			<<< "$desktops"\
 		)
 	done <<< "$OCCUPIED"
+	# Format to a single line and print
 	desktops=$(tr '\n' ' ' <<< "$desktops")
 	desktops=${desktops}
 	printf '%s' "$desktops"
