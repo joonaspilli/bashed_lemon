@@ -22,7 +22,7 @@ submod_bspwm_visual () {
 	# Occupied focused desktops
 	pattern=$(submod_bspwm_visual_create_pattern "$OCC_FOCUSED")
 	if [[ -n "$pattern" ]]; then
-		desktops=$(sed -E "s/$pattern/$(decorate -pf "$(color 'HIGHLIGHT')" -b "$(color 'NOTIFY')" -u "$(color 'HIGHLIGHT')" "\0")/" <<< "$desktops")
+		desktops=$(sed -E "s/$pattern/$(decorate -pf "$(color 'HIGHLIGHT')" -b "$(color 'NOTIFY')" $(decorate -u "$(color 'HIGHLIGHT')" "\0"))/" <<< "$desktops")
 	fi
 	# Focused desktops
 	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
