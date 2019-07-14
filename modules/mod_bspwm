@@ -44,7 +44,7 @@ submod_bspwm_visual () {
 	fi
 	# Format to a single line and print
 	desktops=$(tr '\n' ' ' <<< "$desktops")
-	desktops=${desktops}
+	desktops=${desktops%?}
 	printf '%s' "$desktops"
 }
 
@@ -70,7 +70,7 @@ submod_bspwm_focused_desktops () {
 		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
 }
 
@@ -80,7 +80,7 @@ submod_bspwm_occupied_desktops () {
 		grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
 }
 
@@ -90,7 +90,7 @@ submod_bspwm_urgent_desktops () {
 		grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && alert "URGENT $output" || print_nothing
 }
 
@@ -108,8 +108,8 @@ mod_bspwm () {
 	local -r PAD=$(setting 'MODULE_PADDING')
 	if (( VISUAL )); then
 		local -r SUBMODS=(
-			submod_bspwm_focused_monitor
 			submod_bspwm_visual
+			submod_bspwm_focused_monitor
 		)
 	else
 		local -r SUBMODS=(
