@@ -13,21 +13,23 @@ submod_bspwm_visual_create_pattern () {
 
 submod_bspwm_visual () {
 	local -r STATUS="$1"
-	local -r OCC_FOCUSED=$(grep -Po '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
-	local -r FOCUSED=$(grep -Po '(?<=:(F|U)).+?(?=:)' <<< "$STATUS")
+	local -r ACTIVE_MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
+	local -r ACTIVE_MONITOR_STATUS=$(grep -Po "(?<=$ACTIVE_MONITOR).+?(?=(:m|\$))" <<< "$STATUS")
+	local -r ACTIVE_DESKTOP=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
+	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
 	local -r URGENT=$(grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS")
 	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
 	local desktops=$(bspc query -D --names)
 	local pattern
-	# Occupied focused desktops
-	pattern=$(submod_bspwm_visual_create_pattern "$OCC_FOCUSED")
-	if [[ -n "$pattern" ]]; then
-		desktops=$(sed -E "s/$pattern/$(decorate -pf "$(color 'HIGHLIGHT')" -b "$(color 'NOTIFY')" $(decorate -u "$(color 'HIGHLIGHT')" "\0"))/" <<< "$desktops")
-	fi
-	# Focused desktops
-	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
+	# Active desktops
+	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_DESKTOP")
 	if [[ -n "$pattern" ]]; then
 		desktops=$(sed -E "s/$pattern/$(notify "\0")/" <<< "$desktops")
+	fi
+	# Focused desktops (but not active)
+	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(sed -E "s/$pattern/$(decorate -pb "$(color 'DIMMED')" "\0")/" <<< "$desktops")
 	fi
 	# Urgent desktops
 	pattern=$(submod_bspwm_visual_create_pattern "$URGENT")
@@ -55,7 +57,7 @@ submod_bspwm_focused_monitor () {
 		local -r PRIMARY_MONITOR=$(xrandr -q |\
 			grep -Po '^.*(?= connected primary)')
 		if [[ "$MONITOR" == "$PRIMARY_MONITOR" ]]; then
-			print_nothing
+			printf '%s' "$MONITOR"
 		else
 			notify "$MONITOR"
 		fi
@@ -113,10 +115,10 @@ mod_bspwm () {
 		)
 	else
 		local -r SUBMODS=(
-			submod_bspwm_focused_monitor
 			submod_bspwm_focused_desktops
 			submod_bspwm_occupied_desktops
 			submod_bspwm_urgent_desktops
+			submod_bspwm_focused_monitor
 		)
 	fi
 	local bspwm_status
