@@ -15,18 +15,19 @@ submod_bspwm_visual () {
 	local -r STATUS="$1"
 	local -r ACTIVE_MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
 	local -r ACTIVE_MONITOR_STATUS=$(grep -Po "(?<=$ACTIVE_MONITOR).+?(?=(:m|\$))" <<< "$STATUS")
-	local -r ACTIVE_DESKTOP=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
+	local -r ACTIVE_MONITOR_FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
+	local -r ACTIVE_MONITOR_OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
 	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
 	local -r URGENT=$(grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS")
 	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
 	local desktops=$(bspc query -D --names)
 	local pattern
-	# Active desktops
-	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_DESKTOP")
+	# Active monitor focused desktop
+	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_MONITOR_FOCUSED")
 	if [[ -n "$pattern" ]]; then
 		desktops=$(sed -E "s/$pattern/$(notify "\0")/" <<< "$desktops")
 	fi
-	# Focused desktops (but not active)
+	# Focused desktops on unfocused monitors
 	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
 	if [[ -n "$pattern" ]]; then
 		desktops=$(sed -E "s/$pattern/$(decorate -pb "$(color 'DIMMED')" "\0")/" <<< "$desktops")
@@ -36,11 +37,19 @@ submod_bspwm_visual () {
 	if [[ -n "$pattern" ]]; then
 		desktops=$(sed -E "s/$pattern/$(alert "\0")/" <<< "$desktops")
 	fi
-	# Occupied desktops
-	pattern=$(submod_bspwm_visual_create_pattern "$OCCUPIED")
+	# Active monitor unfocused occupied desktops
+	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_MONITOR_OCCUPIED")
 	if [[ -n "$pattern" ]]; then
 		desktops=$(\
 			sed -E "s/$pattern/$(decorate -u "$(color 'NOTIFY')" "\0")/"\
+			<<< "$desktops"\
+		)
+	fi
+	# Occupied unfocused desktops on unfocused monitors
+	pattern=$(submod_bspwm_visual_create_pattern "$OCCUPIED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(\
+			sed -E "s/$pattern/$(decorate -u "$(color 'DIMMED')" "\0")/"\
 			<<< "$desktops"\
 		)
 	fi
@@ -54,13 +63,7 @@ submod_bspwm_focused_monitor () {
 	local -r STATUS="$1"
 	local -r MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
 	if (( $(bspc query -M | wc -l) > 1 )); then
-		local -r PRIMARY_MONITOR=$(xrandr -q |\
-			grep -Po '^.*(?= connected primary)')
-		if [[ "$MONITOR" == "$PRIMARY_MONITOR" ]]; then
-			printf '%s' "$MONITOR"
-		else
-			notify "$MONITOR"
-		fi
+		printf '%s' "$MONITOR"
 	else
 		print_nothing
 	fi
