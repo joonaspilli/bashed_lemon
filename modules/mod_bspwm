@@ -1,16 +1,69 @@
 #!/usr/bin/env bash
 
+submod_bspwm_visual_create_pattern () {
+	local line pattern
+	if [[ -n "$@" ]]; then
+		while read line; do
+			[[ -n "$pattern" ]] && pattern+='|'
+			pattern+="(^$line\$)"
+		done <<< "$@"
+	fi
+	printf '%s' "$pattern"
+}
+
+submod_bspwm_visual () {
+	local -r STATUS="$1"
+	local -r ACTIVE_MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
+	local -r ACTIVE_MONITOR_STATUS=$(grep -Po "(?<=$ACTIVE_MONITOR).+?(?=(:m|\$))" <<< "$STATUS")
+	local -r ACTIVE_MONITOR_FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
+	local -r ACTIVE_MONITOR_OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$ACTIVE_MONITOR_STATUS")
+	local -r FOCUSED=$(grep -Po '(?<=:(O|F|U)).+?(?=:)' <<< "$STATUS")
+	local -r URGENT=$(grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS")
+	local -r OCCUPIED=$(grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS")
+	local desktops=$(bspc query -D --names)
+	local pattern
+	# Active monitor focused desktop
+	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_MONITOR_FOCUSED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(sed -E "s/$pattern/$(notify "\0")/" <<< "$desktops")
+	fi
+	# Focused desktops on unfocused monitors
+	pattern=$(submod_bspwm_visual_create_pattern "$FOCUSED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(sed -E "s/$pattern/$(decorate -pb "$(color 'DIMMED')" "\0")/" <<< "$desktops")
+	fi
+	# Urgent desktops
+	pattern=$(submod_bspwm_visual_create_pattern "$URGENT")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(sed -E "s/$pattern/$(alert "\0")/" <<< "$desktops")
+	fi
+	# Active monitor unfocused occupied desktops
+	pattern=$(submod_bspwm_visual_create_pattern "$ACTIVE_MONITOR_OCCUPIED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(\
+			sed -E "s/$pattern/$(decorate -u "$(color 'NOTIFY')" "\0")/"\
+			<<< "$desktops"\
+		)
+	fi
+	# Occupied unfocused desktops on unfocused monitors
+	pattern=$(submod_bspwm_visual_create_pattern "$OCCUPIED")
+	if [[ -n "$pattern" ]]; then
+		desktops=$(\
+			sed -E "s/$pattern/$(decorate -u "$(color 'DIMMED')" "\0")/"\
+			<<< "$desktops"\
+		)
+	fi
+	# Format to a single line and print
+	desktops=$(tr '\n' ' ' <<< "$desktops")
+	desktops=${desktops%?}
+	printf '%s' "$desktops"
+}
+
 submod_bspwm_focused_monitor () {
 	local -r STATUS="$1"
-	local -r MONITOR=$(printf '%s' "$STATUS" | grep -Po '(?<=(W|:)M).+?(?=:)')
+	local -r MONITOR=$(grep -Po '(?<=(W|:)M).+?(?=:)' <<< "$STATUS")
 	if (( $(bspc query -M | wc -l) > 1 )); then
-		local -r PRIMARY_MONITOR=$(xrandr -q |\
-			grep -Po '^.*(?= connected primary)')
-		if [[ "$MONITOR" == "$PRIMARY_MONITOR" ]]; then
-			print_nothing
-		else
-			notify "$MONITOR"
-		fi
+		printf '%s' "$MONITOR"
 	else
 		print_nothing
 	fi
@@ -19,52 +72,58 @@ submod_bspwm_focused_monitor () {
 submod_bspwm_focused_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' |\
+		grep -Po '((?<=:(O|F|U)).+?(?=:))|((?<=:L)T|M(?=:|$))' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
 }
 
 submod_bspwm_occupied_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Poi '(?<=:(O|U)).+?(?=:)' |\
+		grep -Poi '(?<=:(O|U)).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && printf '%s' "$output" || print_nothing
 }
 
 submod_bspwm_urgent_desktops () {
 	local -r STATUS="$1"
 	local output=$(\
-		printf '%s' "$STATUS" |\
-		grep -Poi '(?<=:U).+?(?=:)' |\
+		grep -Poi '(?<=:U).+?(?=:)' <<< "$STATUS" |\
 		tr '\n' ' '\
 	)
-	local output="${output%?}"
+	local output=${output%?}
 	[[ -n "$output" ]] && alert "URGENT $output" || print_nothing
 }
 
 mod_bspwm () {
-	local OPTIND arg flag_s
-	while getopts ':s:' arg; do
+	local OPTIND arg flag_s flag_v
+	while getopts ':s:v' arg; do
 		case "$arg" in
 			s) flag_s="$OPTARG" ;;
+			v) flag_v=1;;
 		esac
 	done
 	shift $((OPTIND-1))
-	local -r PAD=$(setting 'MODULE_PADDING')
 	local -r SEP=${flag_s-$(setting 'MODULE_SEPARATOR')}
-	local -r SUBMODS=(
-		submod_bspwm_focused_monitor
-		submod_bspwm_focused_desktops
-		submod_bspwm_occupied_desktops
-		submod_bspwm_urgent_desktops
-	)
+	local -r VISUAL=${flag_v:-0}
+	local -r PAD=$(setting 'MODULE_PADDING')
+	if (( VISUAL )); then
+		local -r SUBMODS=(
+			submod_bspwm_visual
+			submod_bspwm_focused_monitor
+		)
+	else
+		local -r SUBMODS=(
+			submod_bspwm_focused_desktops
+			submod_bspwm_occupied_desktops
+			submod_bspwm_urgent_desktops
+			submod_bspwm_focused_monitor
+		)
+	fi
 	local bspwm_status
 	local prev_status
 	bspc subscribe report | while read bspwm_status; do
