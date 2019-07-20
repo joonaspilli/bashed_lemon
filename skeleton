@@ -16,7 +16,7 @@ $FORMATTED_MODULE_NAME () {
 		case "\$arg" in
 			l) flag_l="\$OPTARG" ;;
 			i) flag_i=\$(icon "\$OPTARG") ;;
-			f) flag_f="$OPTARG" ;;
+			f) flag_f="\$OPTARG" ;;
 		esac
 	done
 	shift \$((OPTIND-1))
