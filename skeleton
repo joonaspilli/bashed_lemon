@@ -3,13 +3,14 @@
 declare -r DIR=$(dirname "$(realpath "$0")")
 declare -r MODULES_DIR="$DIR/modules"
 declare -r MODULE_NAME=$(printf '%s' "$1" | sed 's/^mod_//')
-declare -r MODULE_PATH="$MODULES_DIR/mod_$MODULE_NAME"
+declare -r FORMATTED_MODULE_NAME="mod_$MODULE_NAME"
+declare -r MODULE_PATH="$MODULES_DIR/$FORMATTED_MODULE_NAME"
 
 print_skeleton () {
 cat << _EOF_
 #!/usr/bin/env bash
 
-mod_ram () {
+$FORMATTED_MODULE_NAME () {
 	local OPTIND arg flag_l flag_i flag_f
 	while getopts ':l:i:f:' arg; do
 		case "\$arg" in
