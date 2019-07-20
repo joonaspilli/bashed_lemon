@@ -42,8 +42,12 @@ elif [[ -e "$MODULE_PATH" ]]; then
 	exit 1
 fi
 
-print_skeleton > "$MODULE_PATH" && printf '%s created\n' "$MODULE_PATH"
-chmod u+x "$MODULE_PATH" && printf '%s permissions set\n' "$MODULE_PATH"
+print_skeleton > "$MODULE_PATH"\
+	&& printf '%s created\n' "$MODULE_PATH"\
+	|| exit 1
+chmod u+x "$MODULE_PATH"\
+	&& printf '%s permissions set\n' "$MODULE_PATH"\
+	|| exit 1
 
 exit 0
 
