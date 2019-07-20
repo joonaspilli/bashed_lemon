@@ -14,4 +14,5 @@ Here are listed the most notable direct dependencies for the current setup, whic
 - amixer
 - bspc
 - mpc
+- xrandr
 - xset
