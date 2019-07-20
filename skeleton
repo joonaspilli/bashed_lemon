@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+declare -r DIR=$(dirname "$(realpath "$0")")
+declare -r MODULES_DIR="$DIR/modules"
+declare -r MODULE_NAME=$(printf '%s' "$1" | sed 's/^mod_//')
+declare -r FORMATTED_MODULE_NAME="mod_$MODULE_NAME"
+declare -r MODULE_PATH="$MODULES_DIR/$FORMATTED_MODULE_NAME"
+
+print_skeleton () {
+cat << _EOF_
+#!/usr/bin/env bash
+
+$FORMATTED_MODULE_NAME () {
+	local OPTIND arg flag_l flag_i flag_f
+	while getopts ':l:i:f:' arg; do
+		case "\$arg" in
+			l) flag_l="\$OPTARG" ;;
+			i) flag_i=\$(icon "\$OPTARG") ;;
+			f) flag_f="\$OPTARG" ;;
+		esac
+	done
+	shift \$((OPTIND-1))
+	local -r LABEL=\$flag_l
+	local -r ICON=\${flag_i:-\$(icon 'LEMON')}
+	local -r FREQ=\${flag_f:-30}
+	for ((;;)); do
+		(( GLOBAL_STATUSBAR_MODE )) && sleep "\$FREQ" || break
+	done
+}
+
+_EOF_
+}
+
+if [[ -z "$MODULE_NAME" ]]; then
+	printf 'No module name given!\n' >&2
+	exit 1
+elif [[ ! -d "$MODULES_DIR" ]]; then
+	printf '%s directory does not exist!\n' "$MODULES_DIR" >&2
+	exit 1
+elif [[ -e "$MODULE_PATH" ]]; then
+	printf '%s already exists!\n' "$MODULE_PATH" >&2
+	exit 1
+fi
+
+print_skeleton > "$MODULE_PATH"\
+	&& printf '%s created\n' "$MODULE_PATH"\
+	|| exit 1
+chmod u+x "$MODULE_PATH"\
+	&& printf '%s permissions set\n' "$MODULE_PATH"\
+	|| exit 1
+
+exit 0
+
