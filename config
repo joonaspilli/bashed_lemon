@@ -41,7 +41,7 @@ declare -rg MODULES_TTY=(
 
 declare -Arg MODULES_TTY_FLAGS=(
 	[mod_backlight]='-l "Backlight: "'
-	[mod_battery]='-tl "Battery: "'
+	[mod_battery]='-tml "Battery: "'
 	[mod_internet]='-l "Internet: "'
 	[mod_cpu]='-l "CPU: "'
 	[mod_date]='-l "Date: "'
