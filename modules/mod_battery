@@ -5,18 +5,21 @@ submod_battery_max_charge () {
 	local -r ENERGY_MAX_DESIGN=$(cat "$DIR/energy_full_design")
 	local -r ENERGY_MAX_NOW=$(cat "$DIR/energy_full")
 	local -r MAX_CHARGE=$(( ENERGY_MAX_NOW * 100 / ENERGY_MAX_DESIGN ))
-	printf '%s%%' "$MAX_CHARGE"
+	printf '%s' "$MAX_CHARGE"
 }
 
 mod_battery () {
-	local OPTIND arg flag_l flag_i flag_b flag_t flag_m flag_f flag_w flag_a flag_n
-	while getopts ':l:i:b:tmf:w:a:n:' arg; do
+	local OPTIND arg flag_l flag_i flag_b flag_t flag_m flag_M flag_r flag_f\
+		flag_w flag_a flag_n
+	while getopts ':l:i:b:tmMrf:w:a:n:' arg; do
 		case "$arg" in
 			l) flag_l="$OPTARG" ;;
 			i) flag_i=$(icon "$OPTARG") ;;
 			b) flag_b="$OPTARG" ;;
 			t) flag_t=1 ;;
 			m) flag_m=1 ;;
+			M) flag_M=1 ;;
+			r) flag_r=1 ;;
 			f) flag_f="$OPTARG" ;;
 			w) flag_w="$OPTARG" ;;
 			a) flag_a="$OPTARG" ;;
@@ -29,6 +32,8 @@ mod_battery () {
 	local -r BATTERY=${flag_b:-'BAT1'}
 	local -r SHOW_TIME=${flag_t:-0}
 	local -r SHOW_MAX=${flag_m:-0}
+	local -r SHOW_MAX_IF_FULL=${flag_M:-0}
+	local -r SHOW_REAL_CHARGE=${flag_r:-0}
 	local -r FREQ=${flag_f:-20}
 	local -r WARN_THRES=${flag_w:-20}
 	local -r ALERT_THRES=${flag_a:-40}
@@ -37,13 +42,20 @@ mod_battery () {
 	for ((;;)); do
 		local bat_charge=$(cat "$DIR/capacity")
 		local bat_status=$(cat "$DIR/status")
-		local bat_time max_charge
+		local bat_time max_charge real_charge
 		if (( SHOW_TIME )); then
 			bat_time=$(acpi -b | grep -Po '\d{2}:.+?(?=\s)')
 			[[ -n "$bat_time" ]] && bat_time=" ($bat_time)"
 		fi
-		if (( SHOW_MAX || bat_charge >= NOTIFY_THRES )); then
-			max_charge=" ($(submod_battery_max_charge "$BATTERY"))"
+		if (( SHOW_MAX )) ||\
+			(( SHOW_MAX_IF_FULL && bat_charge >= NOTIFY_THRES )); then
+			max_charge=" ($(submod_battery_max_charge "$BATTERY")%)"
+		fi
+		if (( SHOW_REAL_CHARGE )); then
+			real_charge=$((\
+				$(submod_battery_max_charge "$BATTERY") * bat_charge / 100\
+			))
+			real_charge=" ($real_charge%)"
 		fi
 		if (( bat_charge >= 100 )); then
 			bat_charge=100
@@ -51,7 +63,7 @@ mod_battery () {
 				bat_status='Full'
 			fi
 		fi
-		local line="$LABEL$ICON$bat_charge% $bat_status$bat_time$max_charge"
+		local line="$LABEL$ICON$bat_charge%$real_charge$max_charge $bat_status$bat_time"
 		if [[ "$bat_status" == 'Discharging' ]]; then
 			if (( bat_charge <= WARN_THRES )); then
 				warning -b "$1" "$line"
