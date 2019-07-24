@@ -32,13 +32,30 @@ fi
 ################################################################################
 # Global variables
 
-if [[ -d "$HOME/.bashed_lemon" ]]; then
-	declare -r GLOBAL_CONFIG_DIR="$HOME/.bashed_lemon"
+declare -r GLOBAL_EXPECTED_CONFIG_DIR="$HOME/.bashed_lemon"
+declare -r GLOBAL_RUN_DIR=$(dirname "$(realpath "$0")")
+
+# Config directory
+if [[ -d "$GLOBAL_EXPECTED_CONFIG_DIR" ]]; then
+	declare -r GLOBAL_CONFIG_DIR="$GLOBAL_EXPECTED_CONFIG_DIR"
 else
-	declare -r GLOBAL_CONFIG_DIR="$(dirname "$(realpath "$0")")"
+	declare -r GLOBAL_CONFIG_DIR=$GLOBAL_RUN_DIR
 fi
-declare -r GLOBAL_CONFIG_FILE="$GLOBAL_CONFIG_DIR/config"
-declare -r GLOBAL_MODULES_DIR="$GLOBAL_CONFIG_DIR/modules"
+
+# Config file
+if [[ -x "$GLOBAL_EXPECTED_CONFIG_DIR/config" ]]; then
+	declare -r GLOBAL_CONFIG_FILE="$GLOBAL_EXPECTED_CONFIG_DIR/config"
+else
+	declare -r GLOBAL_CONFIG_FILE="$GLOBAL_RUN_DIR/config"
+fi
+
+# Module directory
+if [[ -d "$GLOBAL_EXPECTED_CONFIG_DIR/modules" ]]; then
+	declare -r GLOBAL_MODULES_DIR="$GLOBAL_EXPECTED_CONFIG_DIR/modules"
+else
+	declare -r GLOBAL_MODULES_DIR="$GLOBAL_RUN_DIR/modules"
+fi
+
 declare -r GLOBAL_EXECUTABLE="$0"
 declare -r GLOBAL_BASENAME=$(basename "$0")
 declare -r GLOBAL_PROCESS_ID=$$
