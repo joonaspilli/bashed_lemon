@@ -32,7 +32,7 @@ mod_battery () {
 	local -r BATTERY=${flag_b:-'BAT1'}
 	local -r SHOW_TIME=${flag_t:-0}
 	local -r SHOW_MAX=${flag_m:-0}
-	local -r SHOW_MAX_IF_FULL=${flag_M:-0}
+	local -r SHOW_MAX_IF_NOTIFY_THRES=${flag_M:-0}
 	local -r SHOW_REAL_CHARGE=${flag_r:-0}
 	local -r FREQ=${flag_f:-20}
 	local -r WARN_THRES=${flag_w:-20}
@@ -48,7 +48,7 @@ mod_battery () {
 			[[ -n "$bat_time" ]] && bat_time=" ($bat_time)"
 		fi
 		if (( SHOW_MAX )) ||\
-			(( SHOW_MAX_IF_FULL && bat_charge >= NOTIFY_THRES )); then
+			(( SHOW_MAX_IF_NOTIFY_THRES && bat_charge >= NOTIFY_THRES )); then
 			max_charge=" ($(submod_battery_max_charge "$BATTERY")%)"
 		fi
 		if (( SHOW_REAL_CHARGE )); then
