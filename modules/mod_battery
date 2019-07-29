@@ -42,7 +42,9 @@ mod_battery () {
 	for ((;;)); do
 		local bat_charge=$(cat "$DIR/capacity")
 		local bat_status=$(cat "$DIR/status")
-		local bat_time max_charge real_charge
+		local bat_time=
+		local max_charge=
+		local real_charge=
 		if (( SHOW_TIME )); then
 			bat_time=$(acpi -b | grep -Po '\d{2}:.+?(?=\s)')
 			[[ -n "$bat_time" ]] && bat_time=" ($bat_time)"
