@@ -39,6 +39,7 @@ mod_battery () {
 	local -r ALERT_THRES=${flag_a:-40}
 	local -r NOTIFY_THRES=${flag_n:-100}
 	local -r DIR="/sys/class/power_supply/$BATTERY"
+	local do_nofication=1
 	for ((;;)); do
 		local bat_charge=$(cat "$DIR/capacity")
 		local bat_status=$(cat "$DIR/status")
@@ -66,6 +67,14 @@ mod_battery () {
 			fi
 		fi
 		local line="$LABEL$ICON$bat_charge%$real_charge$max_charge $bat_status$bat_time"
+		if (( bat_charge <= WARN_THRES )); then
+			if (( do_nofication )); then
+				notification "Battery charge is at $bat_charge%" &
+				do_nofication=0
+			fi
+		else
+				do_nofication=1
+		fi
 		if [[ "$bat_status" == 'Discharging' ]]; then
 			if (( bat_charge <= WARN_THRES )); then
 				warning -b "$1" "$line"
