@@ -348,6 +348,12 @@ dim () {
 	fi
 }
 
+notification () {
+	if (( GLOBAL_STATUSBAR_MODE )); then
+		xmessage -buttons 'OK':0 -default 'OK' -center "$1"
+	fi
+}
+
 ################################################################################
 # Modules
 
