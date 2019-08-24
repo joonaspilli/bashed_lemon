@@ -17,6 +17,7 @@ declare -rg MODULES_BAR=(
 )
 
 declare -Arg MODULES_BAR_FLAGS=(
+	[mod_battery]='-M'
 	[mod_bspwm]='-v'
 	[mod_thermal]='-a 75 -u 70'
 	[mod_mpc]='-sm 30'
@@ -41,7 +42,7 @@ declare -rg MODULES_TTY=(
 
 declare -Arg MODULES_TTY_FLAGS=(
 	[mod_backlight]='-l "Backlight: "'
-	[mod_battery]='-tl "Battery: "'
+	[mod_battery]='-trl "Battery: "'
 	[mod_internet]='-l "Internet: "'
 	[mod_cpu]='-l "CPU: "'
 	[mod_date]='-l "Date: "'
