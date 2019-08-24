@@ -14,22 +14,6 @@ if [[ $$ != "$(pgid_from_pid $$)" ]]; then
 fi
 
 ################################################################################
-# Info
-
-# Global variable name prefixes:
-# MODULES_
-# USER_
-# DEFAULT_
-# GLOBAL_
-
-# Module (bash function) name prefixes:
-# mod_
-# submod_
-
-# NOTE: Use print_nothing function to print out the GLOBAL_NOTHING variable,
-# which tells the main module printing loops to not output anything.
-
-################################################################################
 # Global variables
 
 if [[ -d "$HOME/.bashed_lemon" ]]; then
